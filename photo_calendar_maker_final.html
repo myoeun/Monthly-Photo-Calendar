@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>포토 캘린더 메이커</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #faf8f5;
+            --accent-color: #7d7565;
+            --text-main: #333333;
+            --border-light: #e5e5e5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--accent-color);
+            margin-bottom: 8px;
+        }
+
+        header p {
+            font-size: 14px;
+            color: #8c8c8c;
+        }
+
+        .controls {
+            margin-bottom: 24px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center; /* 셀렉트박스 높이 정렬을 위해 추가 */
+        }
+
+        /* 연/월 셀렉트 박스 디자인 스타일 통합 */
+        .select-box {
+            padding: 10px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border-light);
+            background-color: #ffffff;
+            font-size: 14px;
+            color: var(--text-main);
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+
+        .select-box:focus {
+            border-color: var(--accent-color);
+        }
+
+        .btn {
+            background-color: #ffffff;
+            border: 1px solid var(--border-light);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            border-color: var(--accent-color);
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border-color: var(--accent-color);
+        }
+
+        /* 캘린더 모바일 가상 프레임 - 투명 배경 저장을 위해 background 제거 가능하도록 설정 */
+        .calendar-wrapper {
+            width: 390px;
+            height: 600px;
+            background-color: #e2dfd2; 
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        .calendar-bg {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            filter: brightness(0.85);
+        }
+
+        .calendar-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            background: rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            padding: 40px 24px;
+            color: #ffffff;
+        }
+
+        .calendar-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .calendar-header .title {
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 4px;
+            outline: none;
+            text-transform: lowercase;
+        }
+
+        .weekdays-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            margin-bottom: 16px;
+            opacity: 0.8;
+            font-size: 12px;
+        }
+
+        .days-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            row-gap: 16px;
+            column-gap: 10px;
+        }
+
+        .day-cell {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            cursor: pointer;
+            background-size: cover;
+            background-position: center;
+            transition: all 0.2s ease;
+        }
+
+        .day-cell .day-num {
+            font-weight: 400;
+            line-height: 1.2;
+        }
+
+        .day-cell .plus-icon {
+            font-size: 10px;
+            opacity: 0.6;
+            margin-top: 1px;
+            font-weight: 300;
+        }
+
+        .day-cell:hover {
+            border-color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .day-cell.empty {
+            border: none;
+            cursor: default;
+        }
+
+        .day-cell.has-image {
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+        .day-cell.has-image .day-num,
+        .day-cell.has-image .plus-icon {
+            display: none;
+        }
+
+        .day-cell.has-image:hover {
+            background-blend-mode: overlay;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        .day-cell.has-image:hover .day-num {
+            display: block;
+            color: #ffffff;
+        }
+
+        /* [수정] 내보내기 캡처 시 스타일: 사진이 없는 칸과 프레임 기본 배경, 어두운 오버레이를 전부 완벽하게 투명화 */
+        .is-exporting {
+            background-color: transparent !important;
+            background-image: none !important;
+            box-shadow: none !important;
+        }
+        .is-exporting .calendar-bg {
+            display: none !important; /* 배경 이미지 레이어 숨김 */
+        }
+        .is-exporting .calendar-content {
+            background: transparent !important; /* 반투명 어두운 오버레이 제거 */
+        }
+        .is-exporting .day-cell:not(.has-image) {
+            border-color: transparent !important;
+            background-color: transparent !important;
+            background-image: none !important;
+        }
+        .is-exporting .day-cell:not(.has-image) .day-num,
+        .is-exporting .day-cell:not(.has-image) .plus-icon {
+            display: none !important;
+        }
+
+        #bg-input, #file-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Monthly Photo Calendar</h1>
+        <p>사진으로 기록하는 나의 루틴</p>
+        <p>타이틀은 클릭해 직접 수정 가능해요!</p>
+    </header>
+
+    <div class="controls">
+        <!-- 동적 연도 및 월 선택 드롭다운 추가 -->
+        <select id="year-select" class="select-box"></select>
+        <select id="month-select" class="select-box"></select>
+
+        <label for="bg-input" class="btn"> 배경 사진 삽입</label>
+        <input type="file" id="bg-input" accept="image/*">
+        
+        <button class="btn btn-primary" id="download-btn"> PNG로 저장</button>
+        <button class="btn" id="clear-btn" style="color: #d9534f;">🔄 현재 달 초기화</button>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*">
+
+    <div class="calendar-wrapper" id="calendar-area">
+        <img class="calendar-bg" id="calendar-bg-img" src="">
+        
+        <div class="calendar-content">
+            <div class="calendar-header">
+                <!-- ID 부여로 스크립트 제어 가능하게 매핑 -->
+                <div class="title" id="calendar-title" contenteditable="true">june dump</div>
+            </div>
+
+            <div class="weekdays-grid">
+                <div>mon</div><div>tue</div><div>wed</div><div>thu</div><div>fri</div><div>sat</div><div>sun</div>
+            </div>
+
+            <div class="days-grid" id="days-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const daysContainer = document.getElementById('days-container');
+        const fileInput = document.getElementById('file-input');
+        const bgInput = document.getElementById('bg-input');
+        const bgImg = document.getElementById('calendar-bg-img');
+        const downloadBtn = document.getElementById('download-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const calendarArea = document.getElementById('calendar-area');
+        
+        const yearSelect = document.getElementById('year-select');
+        const monthSelect = document.getElementById('month-select');
+        const calendarTitle = document.getElementById('calendar-title');
+
+        let activeDayIndex = null;
+        
+        // 동적 월별 저장을 위한 데이터 구조 확장 (key: "YYYY-MM")
+        let allSavedPhotos = {};
+        let currentYear = 2026;
+        let currentMonth = 6; // 현재 시점인 6월로 기본 세팅
+
+        // 월별 스토리지 구분을 위한 고유 키값 변경
+        const STORAGE_KEY_PHOTOS_DB = 'photo_calendar_db_v6_merged';
+        const STORAGE_KEY_BG = 'iphone_fixed_calendar_bg_v5';
+
+        const monthNames = [
+            "january", "february", "march", "april", "may", "june",
+            "july", "august", "september", "october", "november", "december"
+        ];
+
+        // 연/월 선택 옵션 초기화 및 이벤트 연결 함수
+        function initSelectOptions() {
+            // 2025년부터 2030년까지 옵션 렌더링
+            for (let y = 2025; y <= 2030; y++) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.innerText = `${y}년`;
+                if (y === currentYear) opt.selected = true;
+                yearSelect.appendChild(opt);
+            }
+
+            // 1월부터 12월까지 옵션 렌더링
+            for (let m = 1; m <= 12; m++) {
+                const opt = document.createElement('option');
+                opt.value = m;
+                opt.innerText = `${m}월`;
+                if (m === currentMonth) opt.selected = true;
+                monthSelect.appendChild(opt);
+            }
+
+            yearSelect.addEventListener('change', (e) => {
+                currentYear = parseInt(e.target.value);
+                updateCalendarView();
+            });
+
+            monthSelect.addEventListener('change', (e) => {
+                currentMonth = parseInt(e.target.value);
+                updateCalendarView();
+            });
+        }
+
+        function initCalendar() {
+            initSelectOptions();
+
+            const localDB = localStorage.getItem(STORAGE_KEY_PHOTOS_DB);
+            if (localDB) allSavedPhotos = JSON.parse(localDB);
+
+            const localBg = localStorage.getItem(STORAGE_KEY_BG);
+            if (localBg) bgImg.src = localBg;
+
+            updateCalendarView();
+        }
+
+        // 연도와 월이 변경될 때마다 그리드 구조와 내부 상태를 자동으로 새로고침하는 엔진 핵심 함수
+        function updateCalendarView() {
+            // 1. 달 이름 자동 업데이트 (ex: june dump)
+            calendarTitle.innerText = `${monthNames[currentMonth - 1]} dump`;
+
+            // 2. 해당 월의 1일 요일 구하기 및 월요일 시작 기준 정렬 계산
+            const firstDayObj = new Date(currentYear, currentMonth - 1, 1);
+            let startDayOfWeek = firstDayObj.getDay(); 
+            // 일요일(0)을 주말 끝자리로 보내고 월요일 시작(0~6) 인덱스로 보정
+            startDayOfWeek = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
+
+            // 3. 해당 월의 마지막 날짜(총 일수) 동적 추출
+            const totalDays = new Date(currentYear, currentMonth, 0).getDate();
+
+            // 4. 동적 계산 결과를 기반으로 그리드 출력
+            renderGrid(startDayOfWeek, totalDays);
+        }
+
+        function renderGrid(emptyCount, totalDays) {
+            daysContainer.innerHTML = '';
+            const currentKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+            const currentMonthPhotos = allSavedPhotos[currentKey] || {};
+
+            // 시작 요일에 맞춘 빈 셀 배치
+            for (let i = 0; i < emptyCount; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'day-cell empty';
+                daysContainer.appendChild(emptyCell);
+            }
+
+            // 날짜 셀 배치 및 이미지 바인딩
+            for (let day = 1; day <= totalDays; day++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'day-cell';
+                
+                const dayNum = document.createElement('span');
+                dayNum.className = 'day-num';
+                dayNum.innerText = day;
+                dayCell.appendChild(dayNum);
+
+                const plusIcon = document.createElement('span');
+                plusIcon.className = 'plus-icon';
+                plusIcon.innerText = '+';
+                dayCell.appendChild(plusIcon);
+
+                if (currentMonthPhotos[day]) {
+                    dayCell.style.backgroundImage = `url(${currentMonthPhotos[day]})`;
+                    dayCell.classList.add('has-image');
+                }
+
+                dayCell.addEventListener('click', () => {
+                    activeDayIndex = day;
+                    fileInput.click();
+                });
+
+                daysContainer.appendChild(dayCell);
+            }
+        }
+
+        function resizeAndCompressImage(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 150;
+                    const MAX_HEIGHT = 150;
+                    
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = MAX_HEIGHT;
+                    const ctx = canvas.getContext('2d');
+                    
+                    const scale = Math.max(MAX_WIDTH / img.width, MAX_HEIGHT / img.height);
+                    const x = (MAX_WIDTH - img.width * scale) / 2;
+                    const y = (MAX_HEIGHT - img.height * scale) / 2;
+                    
+                    ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    callback(dataUrl);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function resizeBackground(file, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 400;
+                    canvas.height = 650;
+                    const ctx = canvas.getContext('2d');
+                    
+                    const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+                    const x = (canvas.width - img.width * scale) / 2;
+                    const y = (canvas.height - img.height * scale) / 2;
+                    
+                    ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    callback(dataUrl);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file || activeDayIndex === null) return;
+
+            resizeAndCompressImage(file, function(compressedBase64) {
+                const currentKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+                if (!allSavedPhotos[currentKey]) allSavedPhotos[currentKey] = {};
+                
+                allSavedPhotos[currentKey][activeDayIndex] = compressedBase64;
+                
+                try {
+                    localStorage.setItem(STORAGE_KEY_PHOTOS_DB, JSON.stringify(allSavedPhotos));
+                } catch (error) {
+                    alert('저장 공간 용량이 초과되었습니다. 다른 달의 안 쓰는 사진을 정리해 주세요.');
+                }
+                updateCalendarView();
+            });
+            e.target.value = '';
+        });
+
+        bgInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            resizeBackground(file, function(compressedBg) {
+                bgImg.src = compressedBg;
+                try {
+                    localStorage.setItem(STORAGE_KEY_BG, compressedBg);
+                } catch (error) {
+                    alert('배경 이미지 용량이 초과되었습니다.');
+                }
+            });
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            const currentKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+            downloadBtn.innerText = '📸 저장 중...';
+            calendarArea.classList.add('is-exporting');
+
+            setTimeout(() => {
+                html2canvas(calendarArea, {
+                    useCORS: true,
+                    scale: 2,
+                    backgroundColor: null
+                }).then(canvas => {
+                    const imageURI = canvas.toDataURL('image/png');
+                    
+                    const link = document.createElement('a');
+                    link.href = imageURI;
+                    link.download = `photo-calendar-${currentKey}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    calendarArea.classList.remove('is-exporting');
+                    downloadBtn.innerText = '💾 PNG로 저장';
+                }).catch(err => {
+                    console.error(err);
+                    calendarArea.classList.remove('is-exporting');
+                    downloadBtn.innerText = '💾 PNG로 저장';
+                });
+            }, 100);
+        });
+
+        clearBtn.addEventListener('click', () => {
+            const currentKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+            if (confirm(`${currentYear}년 ${currentMonth}월의 사진 기록을 모두 삭제할까요?`)) {
+                if (allSavedPhotos[currentKey]) {
+                    delete allSavedPhotos[currentKey];
+                    localStorage.setItem(STORAGE_KEY_PHOTOS_DB, JSON.stringify(allSavedPhotos));
+                }
+                updateCalendarView();
+            }
+        });
+
+        window.onload = initCalendar;
+    </script>
+</body>
+</html>
