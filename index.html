@@ -523,11 +523,11 @@
                     document.body.removeChild(link);
 
                     calendarArea.classList.remove('is-exporting');
-                    downloadBtn.innerText = '💾 배경 투명 PNG로 저장';
+                    downloadBtn.innerText = '투명 PNG로 저장';
                 }).catch(err => {
                     console.error(err);
                     calendarArea.classList.remove('is-exporting');
-                    downloadBtn.innerText = '💾 배경 투명 PNG로 저장';
+                    downloadBtn.innerText = '투명 PNG로 저장';
                 });
             }, 100);
         });
